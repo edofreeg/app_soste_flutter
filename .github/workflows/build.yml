@@ -1,0 +1,59 @@
+name: Build APK
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # Chiave di firma fissa: serve per poter aggiornare l'app
+      # installata senza doverla prima disinstallare.
+      - name: Chiave di firma
+        run: |
+          mkdir -p ~/.android
+          cp debug.keystore ~/.android/debug.keystore
+
+      - name: Genera struttura Android
+        run: |
+          flutter create --platforms=android --project-name soste_autisti --org it.tuonome "$RUNNER_TEMP/app"
+          rm -rf "$RUNNER_TEMP/app/lib" "$RUNNER_TEMP/app/test"
+          cp -r lib pubspec.yaml "$RUNNER_TEMP/app/"
+          sed -i 's/android:label="[^"]*"/android:label="Soste Autisti"/' "$RUNNER_TEMP/app/android/app/src/main/AndroidManifest.xml"
+
+      - name: Compila APK
+        working-directory: ${{ runner.temp }}/app
+        run: |
+          flutter pub get
+          flutter build apk --release
+
+      - name: Rinomina APK
+        run: cp "$RUNNER_TEMP/app/build/app/outputs/flutter-apk/app-release.apk" soste-autisti.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: soste-autisti-apk
+          path: soste-autisti.apk
+
+      - name: Pubblica Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: soste-autisti.apk
