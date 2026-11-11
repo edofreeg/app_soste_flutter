@@ -37,6 +37,8 @@ jobs:
           rm -rf "$RUNNER_TEMP/app/lib" "$RUNNER_TEMP/app/test"
           cp -r lib pubspec.yaml "$RUNNER_TEMP/app/"
           sed -i 's/android:label="[^"]*"/android:label="Soste Autisti"/' "$RUNNER_TEMP/app/android/app/src/main/AndroidManifest.xml"
+          # Le dipendenze Android correnti richiedono almeno compileSdk 36.
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' "$RUNNER_TEMP/app/android/app/build.gradle.kts"
 
       - name: Compila APK
         working-directory: ${{ runner.temp }}/app
