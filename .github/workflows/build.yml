@@ -39,6 +39,18 @@ jobs:
           sed -i 's/android:label="[^"]*"/android:label="Soste Autisti"/' "$RUNNER_TEMP/app/android/app/src/main/AndroidManifest.xml"
           # Le dipendenze Android correnti richiedono almeno compileSdk 36.
           sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' "$RUNNER_TEMP/app/android/app/build.gradle.kts"
+          # Applica compileSdk 36 anche ai moduli Android dei plugin Flutter.
+          cat > "$RUNNER_TEMP/force-compile-sdk.gradle" <<'EOF'
+          allprojects {
+              afterEvaluate {
+                  def androidExtension = project.extensions.findByName("android")
+                  if (androidExtension != null) {
+                      androidExtension.compileSdkVersion(36)
+                  }
+              }
+          }
+          EOF
+          echo "GRADLE_OPTS=-I $RUNNER_TEMP/force-compile-sdk.gradle" >> "$GITHUB_ENV"
 
       - name: Compila APK
         working-directory: ${{ runner.temp }}/app
