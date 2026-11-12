@@ -121,6 +121,19 @@ class Store {
     await _persist();
   }
 
+  // Elimina il record aggiunto più recentemente, senza modificare gli elenchi.
+  Future<void> removeLastSosta() async {
+    if (soste.isEmpty) return;
+    soste.removeLast();
+    await _persist();
+  }
+
+  // Elimina tutte le soste, mantenendo autisti e luoghi salvati nelle preferenze.
+  Future<void> clearSoste() async {
+    soste.clear();
+    await _persist();
+  }
+
   String _esc(String v) {
     if (v.contains(';') || v.contains('"') || v.contains('\n')) {
       return '"${v.replaceAll('"', '""')}"';
@@ -342,6 +355,76 @@ class _HomePageState extends State<HomePage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _confermaEliminaUltima() async {
+    if (store.soste.isEmpty) {
+      _msg('Non ci sono record da eliminare.');
+      return;
+    }
+    final ultima = store.soste.last;
+    final conferma = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminare l’ultimo record?'),
+        content: Text(
+          'Vuoi eliminare la sosta di ${ultima.autista} · ${ultima.luogo} '
+          'del ${fmtDt(ultima.arrivo)}? L’operazione non può essere annullata.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annulla'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.deepOrange),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Elimina record'),
+          ),
+        ],
+      ),
+    );
+    if (conferma != true) return;
+    await store.removeLastSosta();
+    if (mounted) {
+      setState(() {});
+      _msg('Ultimo record eliminato.');
+    }
+  }
+
+  Future<void> _confermaEliminaTutte() async {
+    if (store.soste.isEmpty) {
+      _msg('Non ci sono soste da eliminare.');
+      return;
+    }
+    final conferma = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminare tutte le soste?'),
+        content: const Text(
+          'Saranno eliminate tutte le soste aperte e quelle nello storico. '
+          'Gli elenchi Autisti e Luoghi resteranno invariati. '
+          'L’operazione non può essere annullata.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annulla'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Elimina tutte'),
+          ),
+        ],
+      ),
+    );
+    if (conferma != true) return;
+    await store.clearSoste();
+    if (mounted) {
+      setState(() {});
+      _msg('Tutte le soste sono state eliminate.');
+    }
+  }
+
   Future<void> _esporta() async {
     if (store.soste.isEmpty) {
       _msg('Non ci sono ancora soste da esportare.');
@@ -401,6 +484,81 @@ class _HomePageState extends State<HomePage> {
     final titolo = Theme.of(context).textTheme.titleLarge;
     return Scaffold(
       appBar: AppBar(title: const Text('Soste Autisti')),
+      drawer: Drawer(
+        child: SafeArea(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              const DrawerHeader(
+                child: Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Text(
+                    'Soste Autisti',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.history),
+                title: const Text('Storico'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context)
+                      .push(MaterialPageRoute(
+                          builder: (_) => StoricoPage(store: store)))
+                      .then((_) {
+                    if (mounted) setState(() {});
+                  });
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.list_alt),
+                title: const Text('Gestisci liste'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context)
+                      .push(MaterialPageRoute(
+                          builder: (_) => ListePage(store: store)))
+                      .then((_) {
+                    if (mounted) setState(() {});
+                  });
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.file_download),
+                title: const Text('Esporta CSV'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _esporta();
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.deepOrange),
+                title: const Text(
+                  'Elimina ultimo record',
+                  style: TextStyle(color: Colors.deepOrange),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _confermaEliminaUltima();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_forever, color: Colors.red),
+                title: const Text(
+                  'Elimina tutti i dati',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _confermaEliminaTutte();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -450,31 +608,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           const Divider(height: 32),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.history),
-            label: const Text('Storico'),
-            onPressed: () => Navigator.of(context)
-                .push(MaterialPageRoute(
-                    builder: (_) => StoricoPage(store: store)))
-                .then((_) {
-              if (mounted) setState(() {});
-            }),
-          ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.list_alt),
-            label: const Text('Gestisci liste'),
-            onPressed: () => Navigator.of(context)
-                .push(MaterialPageRoute(
-                    builder: (_) => ListePage(store: store)))
-                .then((_) {
-              if (mounted) setState(() {});
-            }),
-          ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.file_download),
-            label: const Text('Esporta CSV'),
-            onPressed: _esporta,
-          ),
         ],
       ),
     );
