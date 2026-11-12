@@ -59,6 +59,31 @@ class Sosta {
       );
 }
 
+// Luoghi iniziali disponibili in ogni nuova installazione.
+const List<String> defaultLuoghi = [
+  'MUGGIANO',
+  'OLGETTINA',
+  'SILLA',
+  'ZAMA',
+  'EGGER',
+  'ECOLOGICA 2000',
+  'ESPOSITO GORLE',
+  'MONTELLO',
+  'TREZZO - A2A',
+  'CONVERTINI',
+  'INGECO AGRATE',
+  'ALIPLAST',
+  'A2A BRESCIA',
+  'EUROPEIR',
+  "A2A CAVAGLIA'",
+  'GARM',
+  'DELNEGRO',
+  'SILEA',
+  'CEM LISCATE',
+  'CEM MEZZAGO',
+  'ALTRO',
+];
+
 // ------------------------------------------------------------------ storage
 class Store {
   Store._(this._prefs, this._file, this.soste);
@@ -80,6 +105,17 @@ class Store {
             .toList();
       } catch (_) {}
     }
+    // Aggiunge i luoghi predefiniti a quelli già presenti, senza duplicati.
+    final luoghiSalvati = prefs.getStringList('luoghi') ?? <String>[];
+    final luoghiNormalizzati = luoghiSalvati.map((e) => e.toUpperCase()).toSet();
+    for (final luogo in defaultLuoghi) {
+      if (luoghiNormalizzati.add(luogo.toUpperCase())) {
+        luoghiSalvati.add(luogo);
+      }
+    }
+    luoghiSalvati.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    await prefs.setStringList('luoghi', luoghiSalvati);
+
     return Store._(prefs, file, soste);
   }
 
@@ -253,8 +289,10 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  String? get _autistaValido => store.autisti.contains(_autista) ? _autista : null;
-  String? get _luogoValido => store.luoghi.contains(_luogo) ? _luogo : null;
+  String? get _autistaValido =>
+      store.autisti.contains(_autista) ? _autista : null;
+  String? get _luogoValido =>
+      _luogo == null || _luogo!.trim().isEmpty ? null : _luogo!.trim();
 
   void _msg(String t) {
     if (!mounted) return;
@@ -312,6 +350,8 @@ class _HomePageState extends State<HomePage> {
       _msg("La partenza è precedente all'arrivo.");
       return;
     }
+    // Memorizza anche eventuali luoghi digitati manualmente.
+    await store.addItem('luoghi', l);
     await store.addSosta(
         Sosta(autista: a, luogo: l, arrivo: _arrivo!, partenza: _partenza));
     setState(() {
@@ -571,11 +611,57 @@ class _HomePageState extends State<HomePage> {
             onSel: (v) => setState(() => _autista = v),
           ),
           const SizedBox(height: 8),
-          _selettore(
-            label: 'Luogo',
-            valore: _luogoValido,
-            voci: store.luoghi,
-            onSel: (v) => setState(() => _luogo = v),
+          Autocomplete<String>(
+            optionsBuilder: (TextEditingValue value) {
+              final query = value.text.trim().toLowerCase();
+              if (query.isEmpty) return const Iterable<String>.empty();
+              return store.luoghi.where(
+                (luogo) => luogo.toLowerCase().contains(query),
+              );
+            },
+            displayStringForOption: (luogo) => luogo,
+            onSelected: (luogo) => setState(() => _luogo = luogo),
+            fieldViewBuilder:
+                (context, controller, focusNode, onFieldSubmitted) {
+              return TextField(
+                controller: controller,
+                focusNode: focusNode,
+                textCapitalization: TextCapitalization.characters,
+                onChanged: (value) => setState(() {
+                  _luogo = value.trim().isEmpty ? null : value.trim();
+                }),
+                decoration: const InputDecoration(
+                  labelText: 'Luogo',
+                  hintText: 'Scrivi o cerca un luogo',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.place_outlined),
+                ),
+              );
+            },
+            optionsViewBuilder: (context, onSelected, options) {
+              return Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  elevation: 4,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      shrinkWrap: true,
+                      itemCount: options.length,
+                      itemBuilder: (context, index) {
+                        final luogo = options.elementAt(index);
+                        return ListTile(
+                          dense: true,
+                          title: Text(luogo),
+                          onTap: () => onSelected(luogo),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 16),
           DateTimeField(
