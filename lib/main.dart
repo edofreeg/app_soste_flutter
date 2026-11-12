@@ -350,8 +350,7 @@ class _HomePageState extends State<HomePage> {
       _msg("La partenza è precedente all'arrivo.");
       return;
     }
-    // Memorizza anche eventuali luoghi digitati manualmente.
-    await store.addItem('luoghi', l);
+    // I luoghi digitati liberamente valgono per questa sosta soltanto.
     await store.addSosta(
         Sosta(autista: a, luogo: l, arrivo: _arrivo!, partenza: _partenza));
     setState(() {
@@ -615,9 +614,11 @@ class _HomePageState extends State<HomePage> {
             optionsBuilder: (TextEditingValue value) {
               final query = value.text.trim().toLowerCase();
               if (query.isEmpty) return const Iterable<String>.empty();
-              return store.luoghi.where(
-                (luogo) => luogo.toLowerCase().contains(query),
-              );
+              final suggerimenti = store.luoghi
+                  .where((luogo) => luogo.toLowerCase().contains(query))
+                  .toList()
+                ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+              return suggerimenti;
             },
             displayStringForOption: (luogo) => luogo,
             onSelected: (luogo) => setState(() => _luogo = luogo),
