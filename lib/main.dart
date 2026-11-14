@@ -504,13 +504,51 @@ class _HomePageState extends State<HomePage> {
           fileName: nome,
           bytes: bytes,
         );
-        if (path != null) _msg('File salvato.');
+        // Lo storico si cancella solo dopo un salvataggio completato.
+        if (path != null) {
+          await store.clearSoste();
+          if (mounted) {
+            setState(() {});
+            _msg('File salvato. Storico delle soste cancellato.');
+          }
+        }
       } else {
         final dir = await getTemporaryDirectory();
         final f = File('${dir.path}/$nome');
         await f.writeAsBytes(bytes);
         await Share.shareXFiles([XFile(f.path, mimeType: 'text/csv')],
             subject: nome);
+
+        // Al rientro dalla condivisione chiedi se conservare lo storico.
+        if (!mounted) return;
+        final elimina = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Eliminare lo storico?'),
+            content: const Text(
+              'Vuoi eliminare tutte le soste dopo la condivisione del report? '
+              'Gli elenchi Autisti e Luoghi resteranno invariati.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('No, mantieni'),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Sì, elimina'),
+              ),
+            ],
+          ),
+        );
+        if (elimina == true) {
+          await store.clearSoste();
+          if (mounted) {
+            setState(() {});
+            _msg('Storico delle soste eliminato.');
+          }
+        }
       }
     } catch (e) {
       _msg('Errore: $e');
